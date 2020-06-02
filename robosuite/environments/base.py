@@ -101,8 +101,8 @@ class MujocoEnv(metaclass=EnvMeta):
 
         # settings for camera observations
         self.use_camera_obs = use_camera_obs
-        if self.use_camera_obs and not self.has_offscreen_renderer:
-            raise ValueError("Camera observations require an offscreen renderer.")
+        #if self.use_camera_obs and not self.has_offscreen_renderer:
+        #    raise ValueError("Camera observations require an offscreen renderer.")
         self.camera_name = camera_name
         if self.use_camera_obs and self.camera_name is None:
             raise ValueError("Must specify camera name when using camera obs")

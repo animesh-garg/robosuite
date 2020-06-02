@@ -44,7 +44,7 @@ class SawyerIKController(Controller):
         self.setup_inverse_kinematics()
 
         # Should be in (0, 1], smaller values mean less sensitivity.
-        self.user_sensitivity = .3
+        self.user_sensitivity = 1
 
         self.sync_state()
 
@@ -81,7 +81,7 @@ class SawyerIKController(Controller):
             self.robot_jpos_getter(), self.commanded_joint_positions
         )
         for i, delta in enumerate(deltas):
-            velocities[i] = -2. * delta  # -2. * delta
+            velocities[i] = -0.1 * delta  # -2. * delta
         velocities = self.clip_joint_velocities(velocities)
 
         self.commanded_joint_velocities = velocities
@@ -248,7 +248,8 @@ class SawyerIKController(Controller):
             A list of size @num_joints corresponding to the target joint angles.
         """
 
-        self.ik_robot_target_pos += dpos * self.user_sensitivity
+        # self.ik_robot_target_pos += dpos * self.user_sensitivity
+        self.ik_robot_target_pos = dpos * self.user_sensitivity
 
         # this rotation accounts for rotating the end effector by 90 degrees
         # from its rest configuration. The corresponding line in most demo
@@ -299,6 +300,8 @@ class SawyerIKController(Controller):
         for i in range(len(velocities)):
             if velocities[i] >= 1.0:
                 velocities[i] = 1.0
+                print("velocity clipped with joint {}".format(i))
             elif velocities[i] <= -1.0:
                 velocities[i] = -1.0
+                print("velocity clipped with joint {}".format(i))
         return velocities
