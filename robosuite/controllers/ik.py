@@ -415,7 +415,7 @@ class InverseKinematicsController(JointVelocityController):
             self.joint_pos, self.commanded_joint_positions
         )
         for i, delta in enumerate(deltas):
-            velocities[i] = -10. * delta
+            velocities[i] = -0.5 * delta
 
         self.commanded_joint_velocities = velocities
         return velocities
