@@ -56,6 +56,8 @@ TODO: each composite object should specify texture groups that get randomized to
     (geom groups per texture)
 TODO: color perturbations could probably be improved by using a space other than RGB
 """
+import random
+
 import numpy as np
 
 from robosuite.wrappers import Wrapper
@@ -105,7 +107,8 @@ class DomainRandomizationWrapper(Wrapper):
         camera_randomization_args=DEFAULT_CAMERA_ARGS,
         lighting_randomization_args=DEFAULT_LIGHTING_ARGS,
         randomize_on_reset=True,
-        randomize_every_n_steps=1,
+        randomize_every_n_steps_max=10, # TODO-gal - continue
+        randomize_every_n_steps_min=5,
     ):
         """
         Args:
@@ -134,7 +137,10 @@ class DomainRandomizationWrapper(Wrapper):
         self.camera_randomization_args = camera_randomization_args
         self.lighting_randomization_args = lighting_randomization_args
         self.randomize_on_reset = randomize_on_reset
-        self.randomize_every_n_steps = randomize_every_n_steps
+        self.randomize_every_n_steps_max = randomize_every_n_steps_max
+        self.randomize_every_n_steps_min = randomize_every_n_steps_min
+        self.randomize_every_n_steps = random.randint(self.randomize_every_n_steps_min,
+                                                      self.randomize_every_n_steps_max)
 
         self.modders = []
 
@@ -189,6 +195,9 @@ class DomainRandomizationWrapper(Wrapper):
         if self.randomize_every_n_steps > 0:
             if self.step_counter % self.randomize_every_n_steps == 0:
                 self.randomize_domain()
+                self.randomize_every_n_steps = random.randint(self.randomize_every_n_steps_min,
+                                                              self.randomize_every_n_steps_max)
+                self.step_counter = 0
         self.step_counter += 1
 
         return super().step(action)
