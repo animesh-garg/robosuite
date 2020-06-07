@@ -107,7 +107,7 @@ class DomainRandomizationWrapper(Wrapper):
         camera_randomization_args=DEFAULT_CAMERA_ARGS,
         lighting_randomization_args=DEFAULT_LIGHTING_ARGS,
         randomize_on_reset=True,
-        randomize_every_n_steps_max=10, # TODO-gal - continue
+        randomize_every_n_steps_max=10,
         randomize_every_n_steps_min=5,
     ):
         """
