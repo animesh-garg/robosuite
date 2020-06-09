@@ -154,14 +154,14 @@ class MujocoEnv(metaclass=EnvMeta):
         """Resets simulation."""
         # TODO(yukez): investigate black screen of death
         # Use hard reset if requested
-        if self.hard_reset:
-            self.sim.reset()    # TODO: Fix this once black screen of death is fixed
-            #self._destroy_viewer()
-            #self._load_model()
-            #self._initialize_sim()
-        # Else, we only reset the sim internally
-        else:
-            self.sim.reset()
+        # if self.hard_reset:
+        #     self.sim.reset()    # TODO: Fix this once black screen of death is fixed
+        #     #self._destroy_viewer()
+        #     #self._load_model()
+        #     #self._initialize_sim()
+        # # Else, we only reset the sim internally
+        # else:
+        #     self.sim.reset()
         # Reset necessary robosuite-centric variables
         self._reset_internal()
         self.sim.forward()
