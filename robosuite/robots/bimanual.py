@@ -40,9 +40,14 @@ class Bimanual(Robot):
             initial_qpos (sequence of float): If set, determines the initial joint positions of the robot to be
                 instantiated for the task
 
-            initialization_noise (float): The scale factor of uni-variate Gaussian random noise
-                applied to each of a robot's given initial joint positions. Setting this value to "None" or 0.0 results
-                in no noise being applied
+            initialization_noise (dict): Dict containing the initialization noise parameters. The expected keys and
+                corresponding value types are specified below:
+                "magnitude": The scale factor of uni-variate random noise applied to each of a robot's given initial
+                    joint positions. Setting this value to "None" or 0.0 results in no noise being applied.
+                    If "gaussian" type of noise is applied then this magnitude scales the standard deviation applied,
+                    If "uniform" type of noise is applied then this magnitude sets the bounds of the sampling range
+                "type": Type of noise to apply. Can either specify "gaussian" or "uniform"
+                Note: Specifying None will automatically create the required dict with "magnitude" set to 0.0
 
             gripper_type (str or list of str): type of gripper, used to instantiate
                 gripper models from gripper factory. Default is "default", which is the default gripper associated
@@ -113,7 +118,7 @@ class Bimanual(Robot):
             #   policy (control) freq, and ndim (# joints)
             self.controller_config[arm]["robot_name"] = self.name
             self.controller_config[arm]["sim"] = self.sim
-            self.controller_config[arm]["eef_name"] = self.robot_model.eef_name[arm]
+            self.controller_config[arm]["eef_name"] = self.gripper[arm].visualization_sites["grip_site"]
             self.controller_config[arm]["ndim"] = self._joint_split_idx
             self.controller_config[arm]["policy_freq"] = self.control_freq
             (start, end) = (None, self._joint_split_idx) if arm == "right" else (self._joint_split_idx, None)
@@ -154,10 +159,15 @@ class Bimanual(Robot):
                                                         idn="_".join((str(self.idn), arm)))
                 else:
                     # Load user-specified gripper
-                    self.gripper[arm] = gripper_factory(self.gripper_type[arm])
-                if not self.gripper_visualization[arm]:
-                    self.gripper[arm].hide_visualization()
-                self.robot_model.add_gripper(self.gripper[arm], self.robot_model.eef_name[arm])
+                    self.gripper[arm] = gripper_factory(self.gripper_type[arm],
+                                                        idn="_".join((str(self.idn), arm)))
+            else:
+                # Load null gripper
+                self.gripper[arm] = gripper_factory(None, idn="_".join((str(self.idn), arm)))
+            # Use gripper visualization if necessary
+            if not self.gripper_visualization[arm]:
+                self.gripper[arm].hide_visualization()
+            self.robot_model.add_gripper(self.gripper[arm], self.robot_model.eef_name[arm])
 
     def reset(self, deterministic=False):
         """
@@ -169,7 +179,7 @@ class Bimanual(Robot):
         super().reset(deterministic)
 
         if not deterministic:
-            # Now, reset the griipper if necessary
+            # Now, reset the gripper if necessary
             for arm in self.arms:
                 if self.has_gripper[arm]:
                     self.sim.data.qpos[
@@ -203,11 +213,11 @@ class Bimanual(Robot):
                     for actuator in self.gripper[arm].actuators
                 ]
 
-                # IDs of sites for gripper visualization
-                self.eef_site_id[arm] = self.sim.model.site_name2id(
-                    self.gripper[arm].visualization_sites["grip_site"])
-                self.eef_cylinder_id[arm] = self.sim.model.site_name2id(
-                    self.gripper[arm].visualization_sites["grip_cylinder"])
+            # IDs of sites for eef visualization
+            self.eef_site_id[arm] = self.sim.model.site_name2id(
+                self.gripper[arm].visualization_sites["grip_site"])
+            self.eef_cylinder_id[arm] = self.sim.model.site_name2id(
+                self.gripper[arm].visualization_sites["grip_cylinder"])
 
     def control(self, action, policy_step=False):
         """
@@ -253,13 +263,7 @@ class Bimanual(Robot):
 
             # Get gripper action, if applicable
             if self.has_gripper[arm]:
-                gripper_action_actual = self.gripper[arm].format_action(gripper_action)
-                # rescale normalized gripper action to control ranges
-                ctrl_range = self.sim.model.actuator_ctrlrange[self._ref_joint_gripper_actuator_indexes[arm]]
-                bias = 0.5 * (ctrl_range[:, 1] + ctrl_range[:, 0])
-                weight = 0.5 * (ctrl_range[:, 1] - ctrl_range[:, 0])
-                applied_gripper_action = bias + weight * gripper_action_actual
-                self.sim.data.ctrl[self._ref_joint_gripper_actuator_indexes[arm]] = applied_gripper_action
+                self.grip_action(gripper_action, arm)
 
         # Clip the torques
         low, high = self.torque_limits
@@ -268,14 +272,30 @@ class Bimanual(Robot):
         # Apply joint torque control
         self.sim.data.ctrl[self._ref_joint_torq_actuator_indexes] = self.torques
 
+    def grip_action(self, gripper_action, arm):
+        """
+        Executes gripper @action for specified @arm
+
+        Args:
+            gripper_action (float): Value between [-1,1]
+            arm (str): "left" or "right"; arm to execute action
+        """
+        gripper_action_actual = self.gripper[arm].format_action(gripper_action)
+        # rescale normalized gripper action to control ranges
+        ctrl_range = self.sim.model.actuator_ctrlrange[self._ref_joint_gripper_actuator_indexes[arm]]
+        bias = 0.5 * (ctrl_range[:, 1] + ctrl_range[:, 0])
+        weight = 0.5 * (ctrl_range[:, 1] - ctrl_range[:, 0])
+        applied_gripper_action = bias + weight * gripper_action_actual
+        self.sim.data.ctrl[self._ref_joint_gripper_actuator_indexes[arm]] = applied_gripper_action
+
     def visualize_gripper(self):
         """
         Do any needed visualization here.
         """
         for arm in self.arms:
             if self.gripper_visualization[arm]:
-                # By default, don't do any coloring.
-                self.sim.model.site_rgba[self.eef_site_id[arm]] = [0., 0., 0., 0.]
+                # By default, color the ball red
+                self.sim.model.site_rgba[self.eef_site_id[arm]] = [1., 0., 0., 1.]
 
     def get_observations(self, di: OrderedDict):
         """
@@ -302,6 +322,15 @@ class Bimanual(Robot):
         ]
 
         for arm in self.arms:
+            # Add in eef info
+            di[pf + "_{}_".format(arm) + "eef_pos"] = np.array(self.sim.data.site_xpos[self.eef_site_id[arm]])
+            di[pf + "_{}_".format(arm) + "eef_quat"] = T.convert_quat(
+                self.sim.data.get_body_xquat(self.robot_model.eef_name[arm]), to="xyzw"
+            )
+            robot_states.extend([di[pf + "_{}_".format(arm) + "eef_pos"],
+                                 di[pf + "_{}_".format(arm) + "eef_quat"]])
+
+            # add in gripper information
             if self.has_gripper[arm]:
                 di[pf + "_{}_".format(arm) + "gripper_qpos"] = np.array(
                     [self.sim.data.qpos[x] for x in self._ref_gripper_joint_pos_indexes[arm]]
@@ -309,16 +338,8 @@ class Bimanual(Robot):
                 di[pf + "_{}_".format(arm) + "gripper_qvel"] = np.array(
                     [self.sim.data.qvel[x] for x in self._ref_gripper_joint_vel_indexes[arm]]
                 )
-
-                di[pf + "_{}_".format(arm) + "eef_pos"] = np.array(self.sim.data.site_xpos[self.eef_site_id[arm]])
-                di[pf + "_{}_".format(arm) + "eef_quat"] = T.convert_quat(
-                    self.sim.data.get_body_xquat(self.robot_model.eef_name[arm]), to="xyzw"
-                )
-
-                # add in gripper information
                 robot_states.extend([di[pf + "_{}_".format(arm) + "gripper_qpos"],
-                                     di[pf + "_{}_".format(arm) + "eef_pos"],
-                                     di[pf + "_{}_".format(arm) + "eef_quat"]])
+                                     di[pf + "_{}_".format(arm) + "gripper_qvel"]])
 
         di[pf + "robot-state"] = np.concatenate(robot_states)
         return di
